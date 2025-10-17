@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Cleaner - Fix HTML Codes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .drop-zone {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            background: #f8f9ff;
+        }
+        
+        .drop-zone:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        
+        .drop-zone.dragover {
+            border-color: #764ba2;
+            background: #e8eaff;
+            transform: scale(1.02);
+        }
+        
+        .drop-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .drop-text {
+            color: #667eea;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .drop-subtext {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.processing {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .download-btn {
+            display: none;
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .info-box {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .info-box h3 {
+            color: #667eea;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .info-box ul {
+            color: #666;
+            font-size: 14px;
+            margin-left: 20px;
+        }
+        
+        .info-box li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CSV HTML Code Cleaner</h1>
+        <p class="subtitle">Fix &amp;quot; and other HTML codes in your CSV files</p>
+        
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-icon">📁</div>
+            <div class="drop-text">Drop your CSV file here</div>
+            <div class="drop-subtext">or click to browse</div>
+        </div>
+        
+        <input type="file" id="fileInput" class="file-input" accept=".csv">
+        
+        <div id="status" class="status"></div>
+        
+        <button id="downloadBtn" class="download-btn">📥 Download Cleaned CSV</button>
+        
+        <div class="info-box">
+            <h3>What this tool fixes:</h3>
+            <ul>
+                <li>&amp;quot; becomes "</li>
+                <li>&amp;#039; and &amp;apos; become '</li>
+                <li>&amp;amp; becomes &</li>
+                <li>&amp;lt; becomes &lt;</li>
+                <li>&amp;gt; becomes &gt;</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script>
+        let cleanedData = null;
+        let originalFileName = '';
+        
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const downloadBtn = document.getElementById('downloadBtn');
+        
+        // Click to browse
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.csv')) {
+                processFile(file);
+            } else {
+                showStatus('Please drop a CSV file', 'error');
+            }
+        });
+        
+        // File input handler
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        });
+        
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+        }
+        
+        function decodeHTMLEntities(text) {
+            if (typeof text !== 'string') return text;
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = text;
+            return textarea.value;
+        }
+        
+        function processFile(file) {
+            originalFileName = file.name;
+            showStatus('Processing your file...', 'processing');
+            downloadBtn.style.display = 'none';
+            
+            Papa.parse(file, {
+                encoding: 'UTF-8',
+                complete: function(results) {
+                    try {
+                        // Clean all the data
+                        const cleanedRows = results.data.map(row => 
+                            row.map(cell => decodeHTMLEntities(cell))
+                        );
+                        
+                        // Convert back to CSV
+                        cleanedData = Papa.unparse(cleanedRows);
+                        
+                        showStatus('✓ File cleaned successfully!', 'success');
+                        downloadBtn.style.display = 'block';
+                    } catch (error) {
+                        showStatus('Error processing file: ' + error.message, 'error');
+                    }
+                },
+                error: function(error) {
+                    showStatus('Error reading file: ' + error.message, 'error');
+                }
+            });
+        }
+        
+        downloadBtn.addEventListener('click', () => {
+            if (!cleanedData) return;
+            
+            const blob = new Blob(["\ufeff" + cleanedData], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            const newFileName = originalFileName.replace('.csv', '_cleaned.csv');
+            link.setAttribute('href', url);
+            link.setAttribute('download', newFileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showStatus('✓ Downloaded: ' + newFileName, 'success');
+        });
+    </script>
+</body>
+</html>
